@@ -19,7 +19,7 @@ Ce projet est décomposé en 3 parties :
 4. Lancer le projet DAB.Client en débogage
 5. Lancer le projet DAB.Webservice en débogage
 
-Exemple de compte pour tester :
+## Exemple de compte pour tester :
 
-Numéro de compte : 1234123412341234    
-Code : 1234
+Numéro de compte : **1234123412341234**    
+Code : **1234**
