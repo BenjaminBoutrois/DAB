@@ -1,0 +1,88 @@
+﻿@using DAB.Webservice.Models
+@using System.Net.Http
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<div class="modal fade show" id="debitModal" style="display:block; background-color: rgba(10,10,10,.8);"
+     aria-modal="true" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Consulter le compte</h4>
+                <button type="button" class="close" @onclick="@ModalCancel">&times;</button>
+            </div>
+            <div class="modal-body">
+
+                <ul class="list-group">
+                    <li class="list-group-item">Numéro de compte : <strong>@AccountTransaction.AccountNumber</strong></li>
+                    <li class="list-group-item">Montant retiré : <strong>@AccountTransaction.Amount €</strong></li>
+                    @if (successful == null)
+                    {
+                        <li class="list-group-item">Statut : <strong>Chargement...</strong></li>
+                    }
+                    else if (successful == true)
+                    {
+                        <li class="list-group-item">Statut : <strong>Succès</strong></li>
+                        <li class="list-group-item">Ancien solde : <strong>@OldBalance €</strong></li>
+                        <li class="list-group-item">Nouveau solde : <strong>@account.Balance €</strong></li>
+                    }
+                    else
+                    {
+                        <li class="list-group-item">Statut : <strong>Echec (@failureReason)</strong></li>
+                        <li class="list-group-item">Solde : <strong>@OldBalance €</strong></li>
+                    }
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="@ModalOk">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Account account;
+    private bool? successful;
+    private double newBalance;
+    private string failureReason;
+
+    [Parameter]
+    public AccountTransaction AccountTransaction { get; set; }
+
+    [Parameter]
+    public double OldBalance { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnClose { get; set; }
+
+    private Task ModalCancel()
+    {
+        return OnClose.InvokeAsync(false);
+    }
+
+    private Task ModalOk()
+    {
+        return OnClose.InvokeAsync(true);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        HttpResponseMessage responseMessage = await Http.PostAsJsonAsync("https://localhost:44383/Accounts/Debit", AccountTransaction);
+
+        if (responseMessage.StatusCode == System.Net.HttpStatusCode.OK)
+        {
+            successful = true;
+            account = await responseMessage.Content.ReadFromJsonAsync<Account>();
+        }
+        else if (responseMessage.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            successful = false;
+            failureReason = "Vérifier le solde";
+        }
+        else
+        {
+            successful = false;
+            failureReason = "Raison inconnue";
+        }
+    }
+}

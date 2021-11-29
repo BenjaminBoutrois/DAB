@@ -1,0 +1,59 @@
+﻿@using DAB.Webservice.Models
+@using System.Net.Http
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<div class="modal fade show" id="accountModal" style="display:block; background-color: rgba(10,10,10,.8);"
+     aria-modal="true" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Consulter le compte</h4>
+                <button type="button" class="close" @onclick="@ModalCancel">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (account == null)
+                {
+                    <p>Chargement...</p>
+                }
+                else
+                {
+                    <ul class="list-group">
+                        <li class="list-group-item">Numéro de compte : <strong>@account.Number</strong></li>
+                        <li class="list-group-item">Solde : <strong>@account.Balance €</strong></li>
+                    </ul>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="@ModalOk">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Account account;
+
+    [Parameter]
+    public string AccountNumber { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnClose { get; set; }
+
+    private Task ModalCancel()
+    {
+        return OnClose.InvokeAsync(false);
+    }
+
+    private Task ModalOk()
+    {
+        return OnClose.InvokeAsync(true);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        HttpResponseMessage responseMessage = await Http.GetAsync($"https://localhost:44383/Accounts/Get/{AccountNumber}");
+
+        account = await responseMessage.Content.ReadFromJsonAsync<Account>();
+    }
+}

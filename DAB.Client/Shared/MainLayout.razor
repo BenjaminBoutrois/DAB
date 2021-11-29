@@ -1,0 +1,20 @@
+﻿@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <div class="main">
+        <div class="top-row px-4">
+            <a href="about" target="_blank" class="ml-md-auto">À propos</a>
+        </div>
+
+        <div class="content px-4">
+            <BlazoredToasts Position="Blazored.Toast.Configuration.ToastPosition.BottomCenter"
+                            Timeout="7"
+                            ShowProgressBar="true"/>
+            @Body
+        </div>
+    </div>
+</div>

@@ -1,0 +1,224 @@
+﻿@using Models
+@using DAB.Webservice.Models
+@using Microsoft.Extensions.Logging
+@using System.Net.Http
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ILogger<AuthenticationForm> Logger
+@inject IToastService toastService
+
+
+@if (isLogged)
+{
+    <h1><span class="oi oi-key" aria-hidden="true"></span> Vous êtes connecté</h1>
+    <hr />
+
+    <div class="row">
+        <button type="button" class="btn btn-primary" @onclick="() => OpenAccountModal()"><span class="oi oi-eye"></span> Consulter le compte</button>
+    </div>
+    <br />
+
+    <div class="row">
+        <h3><span class="oi oi-briefcase"></span> Effectuer un retrait :</h3>
+    </div>
+    <br />
+
+    <div class="row">
+        <button type="button" class="btn btn-primary" @onclick="() => DebitAccount(20d)">20 €</button>
+    </div>
+    <br />
+    <div class="row">
+        <button type="button" class="btn btn-primary" @onclick="() => DebitAccount(50d)">50 €</button>
+    </div>
+    <br />
+    <div class="row">
+        <button type="button" class="btn btn-primary" @onclick="() => DebitAccount(100d)">100 €</button>
+    </div>
+    <br />
+
+    <div class="row">
+        <h3><span class="oi oi-credit-card"></span> Effectuer un dépôt :</h3>
+    </div>
+    <br />
+
+    <EditForm Model="@creditForm" OnValidSubmit="@HandleCreditSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label for="amount">Montant</label>
+            <InputNumber class="form-control" id="amount" placeholder="10" @bind-Value="creditForm.Amount" />
+        </div>
+        <button type="submit" class="btn btn-primary">Créditer</button>
+    </EditForm>
+
+    @if (AccountModalOpen)
+    {
+        // Consult account details
+        <AccountModal AccountNumber="@account.Number"
+                      OnClose="@OnAccountModalClose">
+        </AccountModal>
+    }
+
+    @if (DebitModalOpen)
+    {
+        // Consult debit details
+        <DebitModal AccountTransaction="@accountTransaction"
+                    OldBalance="@account.Balance"
+                    OnClose="@OnDebitModalClose">
+        </DebitModal>
+    }
+}
+else
+{
+    if (loginFailed)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            <strong>Mauvais numéro de compte / code.</strong>
+        </div>
+    }
+
+    if (accountNotFound)
+    {
+        <div class="alert alert-warning fade show" role="alert">
+            <strong>Le compte n'existe pas ou le service distant n'est pas joignable.</strong>
+        </div>
+    }
+
+    // Authentication Form
+    <h1><span class="oi oi-account-login" aria-hidden="true"></span> Authentification</h1>
+
+    <hr />
+
+    <EditForm Model="@authenticationForm" OnValidSubmit="@HandleAuthenticationSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label for="number">Numéro de carte</label>
+            <InputText class="form-control" id="number" placeholder="0123456789012345" @bind-Value="authenticationForm.Number" />
+        </div>
+        <div class="form-group">
+            <label for="pin">Code</label>
+            <InputText type="password" class="form-control" id="pin" placeholder="0123" @bind-Value="authenticationForm.Pin" />
+        </div>
+        <button type="submit" class="btn btn-primary">S'authentifier</button>
+    </EditForm>
+}
+
+@code {
+    private AuthenticationForm authenticationForm = new();
+    private CreditForm creditForm = new();
+    private Account account;
+    private AccountTransaction accountTransaction;
+    private bool isLogged, loginFailed, accountNotFound;
+    public bool AccountModalOpen { get; set; }
+    public bool DebitModalOpen { get; set; }
+
+    private void OpenAccountModal()
+    {
+        AccountModalOpen = true;
+        StateHasChanged();
+    }
+
+    private async Task OnAccountModalClose(bool accepted)
+    {
+        AccountModalOpen = false;
+        StateHasChanged();
+    }
+
+    private void OpenDebitModal(AccountTransaction accountTransaction)
+    {
+        this.accountTransaction = accountTransaction;
+        DebitModalOpen = true;
+        StateHasChanged();
+    }
+
+    private async Task OnDebitModalClose(bool accepted)
+    {
+        DebitModalOpen = false;
+        StateHasChanged();
+    }
+
+    private async void DebitAccount(double amount)
+    {
+        HttpResponseMessage responseMessage = await Http.GetAsync($"https://localhost:44383/Accounts/Get/{account.Number}");
+
+        // refresh account balance to display in modal
+        account = await responseMessage.Content.ReadFromJsonAsync<Account>();
+
+        AccountTransaction accountTransaction = new AccountTransaction(account.Number, amount);
+
+        OpenDebitModal(accountTransaction);
+    }
+
+    private async void HandleCreditSubmit()
+    {
+        Logger.LogInformation("AuthenticationForm HandleCreditSubmit called");
+
+        AccountTransaction accountTransaction = new AccountTransaction(account.Number, creditForm.Amount);
+
+        HttpResponseMessage responseMessage = await Http.PostAsJsonAsync("https://localhost:44383/Accounts/Credit", accountTransaction);
+
+        if (responseMessage.StatusCode == System.Net.HttpStatusCode.OK)
+        {
+            Logger.LogInformation("Credit succeeded");
+
+            account = await responseMessage.Content.ReadFromJsonAsync<Account>();
+
+            await InvokeAsync(() => toastService.ShowSuccess($"Nouveau solde : {account.Balance} €", heading: "Succès"));
+        }
+        else
+        {
+            Logger.LogInformation("Unknown error");
+
+            await InvokeAsync(() => toastService.ShowError($"Erreur inconnue", heading: "Erreur"));
+        }
+
+        // informs the component its state a changed and it should rerender
+        await InvokeAsync(() => StateHasChanged())
+                    .ConfigureAwait(false);
+    }
+
+    private async void HandleAuthenticationSubmit()
+    {
+        Logger.LogInformation("AuthenticationForm HandleAuthenticationSubmit called");
+
+        AccountAuthentication accountAuthentication = new AccountAuthentication(authenticationForm.Number, authenticationForm.Pin);
+
+        // Process the valid form
+        HttpResponseMessage responseMessage = await Http.PostAsJsonAsync("https://localhost:44383/Accounts/Authenticate", accountAuthentication);
+
+        if (responseMessage.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Logger.LogInformation("Authentication failed");
+            isLogged = false;
+            accountNotFound = false;
+            loginFailed = true;
+        }
+        else if (responseMessage.StatusCode == System.Net.HttpStatusCode.OK)
+        {
+            Logger.LogInformation("Authentication succeeded");
+
+            account = await responseMessage.Content.ReadFromJsonAsync<Account>();
+            loginFailed = false;
+            accountNotFound = false;
+            isLogged = true;
+        }
+        else if (responseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            Logger.LogInformation("The account was not found");
+            isLogged = false;
+            loginFailed = false;
+            accountNotFound = true;
+        }
+        else
+        {
+            Logger.LogInformation("Unknown error");
+        }
+
+        // informs the component its state a changed and it should rerender
+        await InvokeAsync(() => StateHasChanged())
+                    .ConfigureAwait(false);
+    }
+}

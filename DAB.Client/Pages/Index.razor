@@ -1,0 +1,23 @@
+﻿@page "/"
+@using Models
+@using Microsoft.Extensions.Logging
+@using System.Net.Http
+@inject HttpClient Http
+@inject ILogger<AuthenticationForm> Logger
+
+
+<div class="container">
+    <div class="row">
+        <div class="col-8">
+            <Authentication />
+        </div>
+        <div class="col border-left" style="padding-left: 3%">
+            <Search />
+        </div>
+    </div>
+</div>
+
+@code
+{
+
+}

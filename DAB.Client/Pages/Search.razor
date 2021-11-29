@@ -1,0 +1,91 @@
+﻿@using Models
+@using Microsoft.Extensions.Logging
+@using System.Net.Http
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ILogger<AuthenticationForm> Logger
+
+
+<div class="row">
+    @if (cannotReachService)
+    {
+        <div class="alert alert-danger fade show" role="alert">
+            <strong>Le service distant n'est pas joignable.</strong>
+        </div>
+    }
+
+    <EditForm Model="@searchForm" OnValidSubmit="@HandleSearchSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label for="numberToSearch">Recherche</label>
+            <InputText class="form-control" id="numberToSearch" placeholder="0123456789012345" @bind-Value="searchForm.StringToSearch" />
+        </div>
+        <button type="submit" class="btn btn-primary">Rechercher</button>
+    </EditForm>
+</div>
+<div class="row" style="margin-top: 3%">
+    @if (searchSucceeded)
+    {
+        if (accountNumbersFound == null || !accountNumbersFound.Any())
+        {
+            <p>Aucun numéro de compte trouvé.</p>
+        }
+        else
+        {
+            <p>Numéros de compte trouvés :</p>
+
+            <ul class="list-group">
+                @foreach (string accountNumber in accountNumbersFound)
+                {
+                    <li class="list-group-item"><strong>@accountNumber</strong></li>
+                }
+            </ul>
+        }
+    }
+</div>
+@code {
+    private SearchForm searchForm = new();
+    private bool cannotReachService, searchSucceeded;
+    private List<string> accountNumbersFound = new List<string>();
+
+    private async void HandleSearchSubmit()
+    {
+        accountNumbersFound.Clear();
+
+        Logger.LogInformation("SearchForm HandleSearchSubmit called");
+
+        string stringToSearch = searchForm.StringToSearch;
+
+        HttpResponseMessage responseMessage;
+
+        if (string.IsNullOrEmpty(stringToSearch))
+            responseMessage = await Http.GetAsync("https://localhost:44383/Accounts/GetAllNumbers");
+        else
+            responseMessage = await Http.GetAsync($"https://localhost:44383/Accounts/Search/{stringToSearch}");
+
+        if (responseMessage.StatusCode == System.Net.HttpStatusCode.OK)
+        {
+            Logger.LogInformation("Search succeeded");
+
+            accountNumbersFound = await responseMessage.Content.ReadFromJsonAsync<List<string>>();
+
+            searchSucceeded = true;
+            cannotReachService = false;
+        }
+        else if (responseMessage.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            Logger.LogInformation("The remote service cannot be reached");
+            searchSucceeded = false;
+            cannotReachService = true;
+        }
+        else
+        {
+            Logger.LogInformation("Unknown error");
+        }
+
+        await InvokeAsync(() => StateHasChanged())
+            .ConfigureAwait(false);
+    }
+}
