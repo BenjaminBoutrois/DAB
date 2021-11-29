@@ -21,5 +21,5 @@ Ce projet est décomposé en 3 parties :
 
 Exemple de compte pour tester :
 
-Numéro de compte : 1234123412341234
+Numéro de compte : 1234123412341234    
 Code : 1234
